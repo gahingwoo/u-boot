@@ -1,0 +1,58 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+
+#include "rk3576-u-boot.dtsi"
+
+/ {
+	aliases {
+		mmc0 = &sdhci;
+		mmc1 = &sdmmc;
+	};
+};
+
+&work_led {
+	default-state = "on";
+};
+
+&sdhci {
+	cap-mmc-highspeed;
+};
+
+/*
+ * Tie the Type-C VBUS regulator to the OTG USB2 PHY so the PHY core powers
+ * it up when DWC3 attaches; the upstream board DTS leaves phy-supply unset
+ * and USB-C devices stay unpowered in U-Boot.
+ */
+&u2phy0_otg {
+	phy-supply = <&vcc_5v0_typec0>;
+};
+
+/*
+ * GMAC0 PHY on this board is a YT8531C-CA (per ArmSoM CM5 schematic, not the
+ * RTL8211F the upstream comment implies). It uses the SoC's REFCLKO25M
+ * output as its 25 MHz reference, so the matching pinctrl group must be
+ * driven and the PHY node must claim the clock; without this the PHY's
+ * RGMII-RXID delay can't lock and gigabit link is unstable.
+ */
+&gmac0 {
+	pinctrl-0 = <&eth0m0_miim
+		     &eth0m0_tx_bus2
+		     &eth0m0_rx_bus2
+		     &eth0m0_rgmii_clk
+		     &eth0m0_rgmii_bus
+		     &ethm0_clk0_25m_out>;
+};
+
+&rgmii_phy0 {
+	clocks = <&cru REFCLKO25M_GMAC0_OUT>;
+	assigned-clocks = <&cru REFCLKO25M_GMAC0_OUT>;
+	assigned-clock-rates = <25000000>;
+};
+
+/*
+ * U-Boot has no FUSB302 / Type-C role-switch driver, so OTG mode would leave
+ * usb_drd0 in peripheral state and USB-C boot media wouldn't enumerate.
+ * Force host mode for U-Boot only; Linux keeps OTG via the base DTS.
+ */
+&usb_drd0_dwc3 {
+	dr_mode = "host";
+};
